@@ -280,6 +280,7 @@ export default function App() {
         <LoginScreen
           onLoginSuccess={handleLoginSuccess}
           guruList={guruList}
+          schoolSettings={schoolSettings}
         />
         <NotificationToast toasts={toasts} onDismiss={handleDismissToast} />
       </>
@@ -294,6 +295,7 @@ export default function App() {
         onLogout={handlePromptLogout}
         onOpenLoginModal={() => {}}
         isCloudSyncing={isCloudSyncing}
+        schoolSettings={schoolSettings}
       />
 
       {/* Main Layout */}
