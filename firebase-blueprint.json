@@ -1,0 +1,75 @@
+{
+  "entities": {
+    "GuruWali": {
+      "collection": "guru",
+      "fields": {
+        "id": { "type": "string" },
+        "nip": { "type": "string" },
+        "nama": { "type": "string" },
+        "kelasWali": { "type": "string" },
+        "noHp": { "type": "string" },
+        "email": { "type": "string" },
+        "status": { "type": "string" }
+      }
+    },
+    "MuridBimbingan": {
+      "collection": "murid",
+      "fields": {
+        "id": { "type": "string" },
+        "nisn": { "type": "string" },
+        "nama": { "type": "string" },
+        "kelas": { "type": "string" },
+        "jenisKelamin": { "type": "string" },
+        "kontakOrangTua": { "type": "string" },
+        "nipGuruWali": { "type": "string" },
+        "namaGuruWali": { "type": "string" }
+      }
+    },
+    "JurnalBimbingan": {
+      "collection": "jurnal",
+      "fields": {
+        "id": { "type": "string" },
+        "tanggal": { "type": "string" },
+        "waktu": { "type": "string" },
+        "studentId": { "type": "string" },
+        "namaMurid": { "type": "string" },
+        "nisn": { "type": "string" },
+        "kelas": { "type": "string" },
+        "jenisBimbingan": { "type": "string" },
+        "topik": { "type": "string" },
+        "tindakLanjut": { "type": "string" },
+        "nipGuruWali": { "type": "string" },
+        "namaGuruWali": { "type": "string" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "RekapKehadiran": {
+      "collection": "rekap",
+      "fields": {
+        "id": { "type": "string" },
+        "bulan": { "type": "string" },
+        "tahun": { "type": "number" },
+        "kelas": { "type": "string" },
+        "studentId": { "type": "string" },
+        "namaMurid": { "type": "string" },
+        "nisn": { "type": "string" },
+        "sakit": { "type": "number" },
+        "izin": { "type": "number" },
+        "tanpaKeterangan": { "type": "number" }
+      }
+    },
+    "SchoolSettings": {
+      "collection": "settings",
+      "fields": {
+        "namaSekolah": { "type": "string" },
+        "alamatSekolah": { "type": "string" },
+        "npsn": { "type": "string" },
+        "headerCetak": { "type": "string" },
+        "namaKepsek": { "type": "string" },
+        "nipKepsek": { "type": "string" },
+        "logoKabupaten": { "type": "string" },
+        "logoSekolah": { "type": "string" }
+      }
+    }
+  }
+}

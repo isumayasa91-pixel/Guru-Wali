@@ -1,0 +1,6 @@
+{
+  "name": "Aplikasi Guru Wali",
+  "description": "Sistem Informasi & Manajemen Guru Wali: Pendampingan Murid, Jurnal Bimbingan, dan Rekap Kehadiran",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
