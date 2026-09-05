@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { JurnalBimbingan, MuridBimbingan, JenisBimbingan, User } from '../types';
 import { ALL_CLASSES } from '../data/initialData';
 import { exportJurnalToPDF } from '../utils/pdfGenerator';
@@ -35,6 +35,18 @@ export const JurnalBimbinganView: React.FC<JurnalBimbinganViewProps> = ({
   onDeleteJurnal,
   showToast
 }) => {
+  const isAdmin = currentUser?.role === 'admin';
+  const userKelas = currentUser?.kelasWali || '';
+  const userNip = currentUser?.nip || '';
+
+  // Filter students available for bimbingan based on user role
+  const availableStudents = useMemo(() => {
+    if (!isAdmin && userKelas) {
+      return muridList.filter((m) => m.kelas === userKelas || m.nipGuruWali === userNip);
+    }
+    return muridList;
+  }, [muridList, isAdmin, userKelas, userNip]);
+
   // Helper to format device date and time
   const getDeviceDate = () => new Date().toISOString().slice(0, 10);
   const getDeviceTime = () => {
@@ -49,28 +61,28 @@ export const JurnalBimbinganView: React.FC<JurnalBimbinganViewProps> = ({
   const [tanggal, setTanggal] = useState<string>(getDeviceDate());
   const [waktu, setWaktu] = useState<string>(getDeviceTime());
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
-  const [kelas, setKelas] = useState<string>('VIII E');
+  const [kelas, setKelas] = useState<string>(!isAdmin && userKelas ? userKelas : 'VIII E');
   const [jenisBimbingan, setJenisBimbingan] = useState<JenisBimbingan>('Pendampingan Akademik');
   const [topik, setTopik] = useState<string>('');
   const [tindakLanjut, setTindakLanjut] = useState<string>('');
 
   // Table Filters
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterClass, setFilterClass] = useState<string>('SEMUA');
+  const [filterClass, setFilterClass] = useState<string>(!isAdmin && userKelas ? userKelas : 'SEMUA');
   const [filterJenis, setFilterJenis] = useState<string>('SEMUA');
 
   // Set default student if available
   useEffect(() => {
-    if (muridList.length > 0 && !selectedStudentId) {
-      setSelectedStudentId(muridList[0].id);
-      setKelas(muridList[0].kelas);
+    if (availableStudents.length > 0 && !selectedStudentId) {
+      setSelectedStudentId(availableStudents[0].id);
+      setKelas(availableStudents[0].kelas);
     }
-  }, [muridList]);
+  }, [availableStudents, selectedStudentId]);
 
   // When student dropdown changes, auto update class
   const handleStudentSelect = (sId: string) => {
     setSelectedStudentId(sId);
-    const found = muridList.find((m) => m.id === sId);
+    const found = availableStudents.find((m) => m.id === sId);
     if (found) {
       setKelas(found.kelas);
     }
@@ -80,9 +92,12 @@ export const JurnalBimbinganView: React.FC<JurnalBimbinganViewProps> = ({
     setEditingId(null);
     setTanggal(getDeviceDate());
     setWaktu(getDeviceTime());
-    if (muridList.length > 0) {
-      setSelectedStudentId(muridList[0].id);
-      setKelas(muridList[0].kelas);
+    if (availableStudents.length > 0) {
+      setSelectedStudentId(availableStudents[0].id);
+      setKelas(availableStudents[0].kelas);
+    } else {
+      setSelectedStudentId('');
+      setKelas(!isAdmin && userKelas ? userKelas : 'VIII E');
     }
     setJenisBimbingan('Pendampingan Akademik');
     setTopik('');
@@ -102,12 +117,12 @@ export const JurnalBimbinganView: React.FC<JurnalBimbinganViewProps> = ({
       return;
     }
 
-    const selectedMurid = muridList.find((m) => m.id === selectedStudentId);
+    const selectedMurid = availableStudents.find((m) => m.id === selectedStudentId);
     const namaMurid = selectedMurid ? selectedMurid.nama : 'Murid Bimbingan';
     const nisn = selectedMurid ? selectedMurid.nisn : '-';
 
-    const teacherName = currentUser ? currentUser.name : 'Budi Santoso, S.Pd.';
-    const teacherNip = currentUser ? currentUser.nip || '198501122010011002' : '198501122010011002';
+    const teacherName = currentUser?.name || 'Guru Wali';
+    const teacherNip = currentUser?.nip || (selectedMurid?.nipGuruWali || '-');
 
     const newJurnal: JurnalBimbingan = {
       id: editingId || `jurnal-${Date.now()}`,
@@ -116,7 +131,7 @@ export const JurnalBimbinganView: React.FC<JurnalBimbinganViewProps> = ({
       studentId: selectedStudentId,
       namaMurid,
       nisn,
-      kelas,
+      kelas: !isAdmin && userKelas ? userKelas : kelas,
       jenisBimbingan,
       topik: topik.trim(),
       tindakLanjut: tindakLanjut.trim(),
@@ -142,13 +157,23 @@ export const JurnalBimbinganView: React.FC<JurnalBimbinganViewProps> = ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const filteredJurnal = jurnalList.filter((j) => {
+  const roleBaseJurnal = useMemo(() => {
+    if (!isAdmin && userKelas) {
+      return jurnalList.filter((j) => j.kelas === userKelas || j.nipGuruWali === userNip);
+    }
+    return jurnalList;
+  }, [jurnalList, isAdmin, userKelas, userNip]);
+
+  const filteredJurnal = roleBaseJurnal.filter((j) => {
     const matchesSearch =
       j.namaMurid.toLowerCase().includes(searchTerm.toLowerCase()) ||
       j.nisn.includes(searchTerm) ||
       j.topik.toLowerCase().includes(searchTerm.toLowerCase()) ||
       j.tindakLanjut.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesClass = filterClass === 'SEMUA' || j.kelas === filterClass;
+    const matchesClass =
+      !isAdmin && userKelas
+        ? true
+        : filterClass === 'SEMUA' || j.kelas === filterClass;
     const matchesJenis = filterJenis === 'SEMUA' || j.jenisBimbingan === filterJenis;
     return matchesSearch && matchesClass && matchesJenis;
   });
@@ -160,11 +185,19 @@ export const JurnalBimbinganView: React.FC<JurnalBimbinganViewProps> = ({
         <div>
           <div className="flex items-center space-x-2 text-xs font-semibold text-blue-600 mb-1">
             <FileText className="w-4 h-4" />
-            <span>Pencatatan Harian Bimbingan</span>
+            <span>
+              {isAdmin
+                ? 'Pencatatan Harian Bimbingan'
+                : `Jurnal Bimbingan Kelas ${userKelas} • ${currentUser?.name}`}
+            </span>
           </div>
-          <h2 className="text-2xl font-bold text-slate-800">Jurnal Guru Wali</h2>
+          <h2 className="text-2xl font-bold text-slate-800">
+            {isAdmin ? 'Jurnal Guru Wali' : `Jurnal Bimbingan Kelas ${userKelas}`}
+          </h2>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Dokumentasikan sesi diskusi, kendala akademik, kompetensi, keterampilan, dan pembentukan karakter murid.
+            {isAdmin
+              ? 'Dokumentasikan sesi diskusi, kendala akademik, kompetensi, keterampilan, dan pembentukan karakter murid.'
+              : `Dokumentasikan pendampingan dan bimbingan untuk siswa perwalian Kelas ${userKelas}.`}
           </p>
         </div>
 
@@ -252,7 +285,7 @@ export const JurnalBimbinganView: React.FC<JurnalBimbinganViewProps> = ({
                 className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-500 font-medium"
               >
                 <option value="">-- Pilih Nama Murid Bimbingan --</option>
-                {muridList.map((m) => (
+                {availableStudents.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.nama} (NISN: {m.nisn}) - Kelas {m.kelas}
                   </option>
@@ -262,20 +295,29 @@ export const JurnalBimbinganView: React.FC<JurnalBimbinganViewProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                Kelas ( Dropdown, VIII E, IX A ... )
+                Kelas
               </label>
-              <select
-                value={kelas}
-                onChange={(e) => setKelas(e.target.value)}
-                required
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-500 font-medium"
-              >
-                {ALL_CLASSES.map((k) => (
-                  <option key={k} value={k}>
-                    Kelas {k}
-                  </option>
-                ))}
-              </select>
+              {isAdmin ? (
+                <select
+                  value={kelas}
+                  onChange={(e) => setKelas(e.target.value)}
+                  required
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-500 font-medium"
+                >
+                  {ALL_CLASSES.map((k) => (
+                    <option key={k} value={k}>
+                      Kelas {k}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  disabled
+                  value={`Kelas ${userKelas}`}
+                  className="w-full bg-slate-100 border border-slate-200 rounded-lg px-3.5 py-2.5 text-xs text-slate-700 font-bold"
+                />
+              )}
             </div>
           </div>
 
@@ -371,22 +413,28 @@ export const JurnalBimbinganView: React.FC<JurnalBimbinganViewProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center space-x-1.5 text-xs text-slate-500 font-medium">
-              <Filter className="w-3.5 h-3.5" />
-              <span>Kelas:</span>
-              <select
-                value={filterClass}
-                onChange={(e) => setFilterClass(e.target.value)}
-                className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-500"
-              >
-                <option value="SEMUA">Semua Kelas</option>
-                {ALL_CLASSES.map((k) => (
-                  <option key={k} value={k}>
-                    Kelas {k}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {isAdmin ? (
+              <div className="flex items-center space-x-1.5 text-xs text-slate-500 font-medium">
+                <Filter className="w-3.5 h-3.5" />
+                <span>Kelas:</span>
+                <select
+                  value={filterClass}
+                  onChange={(e) => setFilterClass(e.target.value)}
+                  className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-500"
+                >
+                  <option value="SEMUA">Semua Kelas</option>
+                  {ALL_CLASSES.map((k) => (
+                    <option key={k} value={k}>
+                      Kelas {k}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold">
+                Kelas {userKelas}
+              </div>
+            )}
 
             <div className="flex items-center space-x-1.5 text-xs text-slate-500 font-medium">
               <span>Pilar:</span>

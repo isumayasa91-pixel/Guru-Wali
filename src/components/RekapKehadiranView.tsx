@@ -29,11 +29,14 @@ export const RekapKehadiranView: React.FC<RekapKehadiranViewProps> = ({
   onSaveRekapBatch,
   showToast
 }) => {
+  const isAdmin = currentUser?.role === 'admin';
+  const userKelas = currentUser?.kelasWali || '';
+
   // Selectors
   const currentMonthIdx = new Date().getMonth();
   const [bulan, setBulan] = useState<string>(MONTHS_LIST[currentMonthIdx] || 'September');
   const [tahun, setTahun] = useState<number>(new Date().getFullYear());
-  const [kelas, setKelas] = useState<string>('VIII E');
+  const [kelas, setKelas] = useState<string>(!isAdmin && userKelas ? userKelas : 'VIII E');
 
   // Search filter
   const [searchTerm, setSearchTerm] = useState('');
@@ -43,8 +46,10 @@ export const RekapKehadiranView: React.FC<RekapKehadiranViewProps> = ({
     [studentId: string]: { sakit: number; izin: number; tanpaKeterangan: number };
   }>({});
 
+  const effectiveKelas = !isAdmin && userKelas ? userKelas : kelas;
+
   // Filter students by selected class
-  const classStudents = muridList.filter((m) => m.kelas === kelas);
+  const classStudents = muridList.filter((m) => m.kelas === effectiveKelas);
 
   // Initialize or reload map when bulan, tahun, or kelas changes
   useEffect(() => {
@@ -68,7 +73,7 @@ export const RekapKehadiranView: React.FC<RekapKehadiranViewProps> = ({
     });
 
     setAttendanceMap(newMap);
-  }, [bulan, tahun, kelas, rekapList, muridList]);
+  }, [bulan, tahun, effectiveKelas, rekapList, muridList]);
 
   const handleValueChange = (
     studentId: string,
@@ -160,17 +165,25 @@ export const RekapKehadiranView: React.FC<RekapKehadiranViewProps> = ({
         <div>
           <div className="flex items-center space-x-2 text-xs font-semibold text-emerald-600 mb-1">
             <CalendarCheck className="w-4 h-4" />
-            <span>Rekapitulasi Kehadiran & Presensi Murid</span>
+            <span>
+              {isAdmin
+                ? 'Rekapitulasi Kehadiran & Presensi Murid'
+                : `Rekap Kehadiran Kelas ${userKelas} • ${currentUser?.name}`}
+            </span>
           </div>
-          <h2 className="text-2xl font-bold text-slate-800">Rekap Kehadiran Murid</h2>
+          <h2 className="text-2xl font-bold text-slate-800">
+            {isAdmin ? 'Rekap Kehadiran Murid' : `Rekap Kehadiran Siswa Kelas ${userKelas}`}
+          </h2>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Input dan simpan rekapitulasi jumlah hari Sakit, Izin, dan Tanpa Keterangan per bulan.
+            {isAdmin
+              ? 'Input dan simpan rekapitulasi jumlah hari Sakit, Izin, dan Tanpa Keterangan per bulan.'
+              : `Input dan simpan rekapitulasi presensi bulanan siswa binaan Kelas ${userKelas}.`}
           </p>
         </div>
 
         <div className="flex items-center space-x-3">
           <button
-            onClick={() => exportRekapKehadiranToPDF(currentExportRecords, bulan, tahun, kelas)}
+            onClick={() => exportRekapKehadiranToPDF(currentExportRecords, bulan, tahun, effectiveKelas)}
             className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs sm:text-sm flex items-center space-x-2 shadow-sm transition-all"
           >
             <Download className="w-4 h-4" />
@@ -215,19 +228,26 @@ export const RekapKehadiranView: React.FC<RekapKehadiranViewProps> = ({
 
         <div>
           <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-            Pilih Kelas ( VIII E, IX A, ... )
+            Kelas
           </label>
-          <select
-            value={kelas}
-            onChange={(e) => setKelas(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-500 font-bold text-blue-600"
-          >
-            {ALL_CLASSES.map((k) => (
-              <option key={k} value={k}>
-                Kelas {k}
-              </option>
-            ))}
-          </select>
+          {isAdmin ? (
+            <select
+              value={kelas}
+              onChange={(e) => setKelas(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-500 font-bold text-blue-600"
+            >
+              {ALL_CLASSES.map((k) => (
+                <option key={k} value={k}>
+                  Kelas {k}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="w-full bg-blue-50 border border-blue-200 rounded-lg px-3.5 py-2.5 text-xs text-blue-700 font-bold flex items-center justify-between">
+              <span>Kelas {userKelas}</span>
+              <span className="text-[10px] font-normal bg-blue-100 px-2 py-0.5 rounded text-blue-800">Wali Kelas Aktif</span>
+            </div>
+          )}
         </div>
       </div>
 

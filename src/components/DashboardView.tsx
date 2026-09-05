@@ -55,31 +55,29 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const isAdmin = currentUser?.role === 'admin';
   const isGuru = currentUser?.role === 'guru';
   const userKelas = currentUser?.kelasWali || '';
+  const userNip = currentUser?.nip || '';
 
-  // Filter toggle for Guru: show only their class vs all school data
-  const [filterMyClassOnly, setFilterMyClassOnly] = useState<boolean>(isGuru && !!userKelas);
-
-  // Filter data according to selection
+  // For Guru Wali, data is strictly isolated to their own class/students
   const filteredMurid = useMemo(() => {
-    if (filterMyClassOnly && userKelas) {
-      return muridList.filter((m) => m.kelas === userKelas);
+    if (!isAdmin && userKelas) {
+      return muridList.filter((m) => m.kelas === userKelas || m.nipGuruWali === userNip);
     }
     return muridList;
-  }, [muridList, filterMyClassOnly, userKelas]);
+  }, [muridList, isAdmin, userKelas, userNip]);
 
   const filteredJurnal = useMemo(() => {
-    if (filterMyClassOnly && userKelas) {
-      return jurnalList.filter((j) => j.kelas === userKelas);
+    if (!isAdmin && userKelas) {
+      return jurnalList.filter((j) => j.kelas === userKelas || j.nipGuruWali === userNip);
     }
     return jurnalList;
-  }, [jurnalList, filterMyClassOnly, userKelas]);
+  }, [jurnalList, isAdmin, userKelas, userNip]);
 
   const filteredRekap = useMemo(() => {
-    if (filterMyClassOnly && userKelas) {
+    if (!isAdmin && userKelas) {
       return rekapList.filter((r) => r.kelas === userKelas);
     }
     return rekapList;
-  }, [rekapList, filterMyClassOnly, userKelas]);
+  }, [rekapList, isAdmin, userKelas]);
 
   // Statistics calculation
   const totalGuruAktif = guruList.filter((g) => g.status === 'Aktif').length;
@@ -113,9 +111,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   // Unique Classes list
   const classList = useMemo(() => {
+    if (!isAdmin && userKelas) {
+      return [userKelas];
+    }
     const classes = Array.from(new Set(muridList.map((m) => m.kelas).filter(Boolean))).sort();
     return classes;
-  }, [muridList]);
+  }, [muridList, isAdmin, userKelas]);
 
   // Group murid by class
   const classBreakdown = useMemo(() => {
@@ -130,8 +131,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       return {
         kelas,
-        wali: wali ? wali.nama : 'Belum Ditentukan',
-        waliNip: wali ? wali.nip : '-',
+        wali: wali ? wali.nama : (isGuru && userKelas === kelas ? (currentUser?.name || 'Anda') : 'Belum Ditentukan'),
+        waliNip: wali ? wali.nip : (isGuru && userKelas === kelas ? userNip : '-'),
         waliHp: wali ? wali.noHp : '-',
         totalMurid: muridInClass.length,
         laki: muridInClass.filter((m) => m.jenisKelamin === 'Laki-laki').length,
@@ -140,7 +141,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         totalAbsen: sakit + izin + alpa
       };
     });
-  }, [classList, muridList, guruList, jurnalList, rekapList]);
+  }, [classList, muridList, guruList, jurnalList, rekapList, isGuru, userKelas, currentUser, userNip]);
 
   // Recent 5 Journal entries
   const recentJurnal = useMemo(() => {
@@ -212,37 +213,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               {getGreeting()}, {currentUser?.name || 'Bapak/Ibu Pendidik'}
             </h1>
             <p className="text-blue-100 text-xs sm:text-sm max-w-2xl leading-relaxed">
-              Selamat datang di Dashboard Utama Sistem Informasi Guru Wali{' '}
-              <span className="font-semibold text-white">
-                {schoolSettings.namaSekolah || 'Sekolah'}
-              </span>
-              . Pantau perkembangan murid, jurnal pembinaan, dan rekapitulasi secara terpusat.
+              {isAdmin
+                ? `Selamat datang di Dashboard Utama Sistem Informasi Guru Wali ${schoolSettings.namaSekolah || 'Sekolah'}. Pantau perkembangan murid, jurnal pembinaan, dan rekapitulasi secara terpusat.`
+                : `Selamat datang di Dashboard Guru Wali Kelas ${userKelas} - ${schoolSettings.namaSekolah || 'Sekolah'}. Memantau catatan perkembangan dan presensi murid bimbingan Anda.`}
             </p>
           </div>
 
           {/* Quick Info & Filter Badges */}
           <div className="flex flex-wrap items-center gap-2 shrink-0">
-            {isGuru && userKelas && (
-              <button
-                onClick={() => setFilterMyClassOnly(!filterMyClassOnly)}
-                className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-all shadow-xs ${
-                  filterMyClassOnly
-                    ? 'bg-white text-blue-700 hover:bg-blue-50'
-                    : 'bg-white/20 text-white hover:bg-white/30 border border-white/30'
-                }`}
-                title="Klik untuk mengubah cakupan data dashboard"
-              >
-                <Filter className="w-3.5 h-3.5" />
-                <span>
-                  {filterMyClassOnly ? `Fokus Kelas ${userKelas}` : 'Semua Data Sekolah'}
-                </span>
-              </button>
-            )}
-
             <div className="bg-white/15 border border-white/20 px-3.5 py-2 rounded-xl text-xs flex items-center space-x-2 text-white">
               <ShieldCheck className="w-4 h-4 text-emerald-300" />
               <span className="font-medium">
-                {isAdmin ? 'Akun Administrator' : `Guru Wali • ${userKelas || 'Guru Mapel'}`}
+                {isAdmin ? 'Akun Administrator' : `Guru Wali Kelas ${userKelas || 'Guru Mapel'}`}
               </span>
             </div>
           </div>
@@ -251,35 +233,53 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* 4 Main KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Guru Wali */}
+        {/* Card 1: Guru Wali (or Identitas Guru for Guru Wali) */}
         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                Guru Wali
+                {isAdmin ? 'Guru Wali' : 'Wali Kelas'}
               </span>
               <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100">
                 <Users className="w-4 h-4" />
               </div>
             </div>
-            <div className="mt-3 flex items-baseline space-x-2">
-              <span className="text-3xl font-extrabold text-slate-900 tracking-tight">
-                {guruList.length}
-              </span>
-              <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                {totalGuruAktif} Aktif
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 mt-1">
-              {classList.length} Kelas Terdaftar di Sistem
-            </p>
+            {isAdmin ? (
+              <>
+                <div className="mt-3 flex items-baseline space-x-2">
+                  <span className="text-3xl font-extrabold text-slate-900 tracking-tight">
+                    {guruList.length}
+                  </span>
+                  <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    {totalGuruAktif} Aktif
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  {classList.length} Kelas Terdaftar di Sistem
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="mt-3">
+                  <span className="text-lg font-bold text-slate-900 line-clamp-1">
+                    {currentUser?.name}
+                  </span>
+                  <span className="text-xs text-slate-500 block">
+                    NIP: {userNip || '-'}
+                  </span>
+                </div>
+                <p className="text-xs font-semibold text-blue-600 mt-1">
+                  Bimbingan Kelas {userKelas}
+                </p>
+              </>
+            )}
           </div>
 
           <button
-            onClick={() => onNavigateTab('guru')}
+            onClick={() => onNavigateTab(isAdmin ? 'guru' : 'murid')}
             className="mt-4 pt-3 border-t border-slate-100 w-full flex items-center justify-between text-xs font-semibold text-blue-600 hover:text-blue-700 group"
           >
-            <span>Kelola Guru Wali</span>
+            <span>{isAdmin ? 'Kelola Guru Wali' : 'Lihat Murid Kelas'}</span>
             <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
           </button>
         </div>
@@ -602,25 +602,47 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-emerald-600 group-hover:translate-x-1 transition-all" />
               </button>
 
-              <button
-                onClick={() => onNavigateTab('settings')}
-                className="w-full flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-all text-left group"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 rounded-lg bg-slate-700 text-white flex items-center justify-center text-xs">
-                    <Settings className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-slate-800">
-                      Pengaturan & Kop Cetak
+              {isAdmin ? (
+                <button
+                  onClick={() => onNavigateTab('settings')}
+                  className="w-full flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-all text-left group"
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 rounded-lg bg-slate-700 text-white flex items-center justify-center text-xs">
+                      <Settings className="w-4 h-4" />
                     </div>
-                    <div className="text-[10px] text-slate-500">
-                      Identitas sekolah & kepala sekolah
+                    <div>
+                      <div className="text-xs font-bold text-slate-800">
+                        Pengaturan & Kop Cetak
+                      </div>
+                      <div className="text-[10px] text-slate-500">
+                        Identitas sekolah & kepala sekolah
+                      </div>
                     </div>
                   </div>
-                </div>
-                <ArrowRight className="w-4 h-4 text-slate-400 group-hover:translate-x-1 transition-all" />
-              </button>
+                  <ArrowRight className="w-4 h-4 text-slate-400 group-hover:translate-x-1 transition-all" />
+                </button>
+              ) : (
+                <button
+                  onClick={() => onNavigateTab('program')}
+                  className="w-full flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 transition-all text-left group"
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center text-xs">
+                      <BookOpen className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-slate-800 group-hover:text-blue-700">
+                        Panduan 4 Pilar Program
+                      </div>
+                      <div className="text-[10px] text-slate-500">
+                        Bentuk kegiatan & panduan bimbingan
+                      </div>
+                    </div>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
+                </button>
+              )}
             </div>
           </div>
 

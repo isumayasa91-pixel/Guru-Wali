@@ -24,10 +24,22 @@ export const Navbar: React.FC<NavbarProps> = ({
     const updateTime = () => {
       const now = new Date();
       setTimeStr(
-        now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+        now.toLocaleTimeString('id-ID', {
+          timeZone: 'Asia/Makassar',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        })
       );
       setDateStr(
-        now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+        now.toLocaleDateString('id-ID', {
+          timeZone: 'Asia/Makassar',
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric'
+        })
       );
     };
 
@@ -86,7 +98,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="text-slate-300">|</span>
               <div className="flex items-center space-x-1.5 text-emerald-600 font-mono font-bold">
                 <Clock className="w-3.5 h-3.5" />
-                <span>{timeStr} WIB</span>
+                <span>{timeStr} WITA</span>
               </div>
             </div>
 

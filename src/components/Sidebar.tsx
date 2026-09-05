@@ -27,57 +27,68 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLogout,
   onOpenLoginModal
 }) => {
-  const menuItems = [
+  const allMenuItems = [
     {
       id: 'dashboard' as ActiveTab,
       label: 'Dashboard',
-      subtitle: 'Ringkasan Laporan Keseluruhan',
+      subtitle: isAdmin ? 'Ringkasan Laporan Keseluruhan' : `Ringkasan Kelas ${currentUser?.kelasWali || ''}`,
       icon: LayoutDashboard,
-      badge: 'Utama'
+      badge: 'Utama',
+      roles: ['admin', 'guru']
     },
     {
       id: 'program' as ActiveTab,
       label: 'Program Kegiatan',
       subtitle: 'Pilar & Bentuk Kegiatan',
       icon: BookOpen,
-      badge: '4 Pilar'
+      badge: '4 Pilar',
+      roles: ['admin', 'guru']
     },
     {
       id: 'guru' as ActiveTab,
       label: 'Daftar Guru Wali',
       subtitle: 'Input Manual & Upload Excel',
       icon: Users,
-      badge: `${guruCount} Guru`
+      badge: `${guruCount} Guru`,
+      roles: ['admin'] // Admin only
     },
     {
       id: 'murid' as ActiveTab,
       label: 'Daftar Bimbingan Murid',
-      subtitle: 'Identitas & Data Murid',
+      subtitle: isAdmin ? 'Identitas Seluruh Murid' : `Murid Kelas ${currentUser?.kelasWali || ''}`,
       icon: GraduationCap,
-      badge: `${muridCount} Murid`
+      badge: `${muridCount} Murid`,
+      roles: ['admin', 'guru']
     },
     {
       id: 'jurnal' as ActiveTab,
       label: 'Jurnal Guru Wali',
-      subtitle: 'Catatan Bimbingan Harian',
+      subtitle: isAdmin ? 'Semua Catatan Bimbingan' : 'Catatan Bimbingan Kelas',
       icon: FileText,
-      badge: `${jurnalCount} Catatan`
+      badge: `${jurnalCount} Catatan`,
+      roles: ['admin', 'guru']
     },
     {
       id: 'rekap' as ActiveTab,
       label: 'Rekap Kehadiran Murid',
-      subtitle: 'Sakit, Izin & Tanpa Ket.',
+      subtitle: isAdmin ? 'Semua Kelas (S/I/A)' : `Presensi Kelas ${currentUser?.kelasWali || ''}`,
       icon: CalendarCheck,
-      badge: 'Bulanan'
+      badge: 'Bulanan',
+      roles: ['admin', 'guru']
     },
     {
       id: 'settings' as ActiveTab,
       label: 'Pengaturan Sekolah',
       subtitle: 'Identitas & Kop Header PDF',
       icon: Settings,
-      badge: 'Kop Cetak'
+      badge: 'Kop Cetak',
+      roles: ['admin'] // Admin only
     }
   ];
+
+  const menuItems = allMenuItems.filter((item) =>
+    isAdmin ? true : item.roles.includes('guru')
+  );
 
   return (
     <aside className="w-full md:w-64 bg-[#1E293B] border-r border-slate-800 shrink-0 p-4 flex flex-col justify-between text-white">

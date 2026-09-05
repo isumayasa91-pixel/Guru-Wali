@@ -344,6 +344,7 @@ export default function App() {
             <DaftarMuridView
               muridList={muridList}
               guruList={guruList}
+              currentUser={currentUser}
               onSaveMurid={handleSaveMurid}
               onDeleteMurid={handleDeleteMurid}
               onImportMurid={handleImportMurid}

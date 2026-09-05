@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { MuridBimbingan, GuruWali, JenisKelamin } from '../types';
+import { MuridBimbingan, GuruWali, JenisKelamin, User } from '../types';
 import { ALL_CLASSES } from '../data/initialData';
 import {
   exportMuridToExcel,
@@ -30,6 +30,7 @@ interface DaftarMuridViewProps {
   onDeleteMurid: (id: string) => void;
   onImportMurid: (imported: MuridBimbingan[]) => void;
   showToast: (title: string, message?: string, type?: 'success' | 'error' | 'info') => void;
+  currentUser?: User | null;
 }
 
 export const DaftarMuridView: React.FC<DaftarMuridViewProps> = ({
@@ -38,10 +39,17 @@ export const DaftarMuridView: React.FC<DaftarMuridViewProps> = ({
   onSaveMurid,
   onDeleteMurid,
   onImportMurid,
-  showToast
+  showToast,
+  currentUser
 }) => {
+  const isAdmin = currentUser?.role === 'admin';
+  const userKelas = currentUser?.kelasWali || '';
+  const userNip = currentUser?.nip || '';
+
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedClassFilter, setSelectedClassFilter] = useState<string>('SEMUA');
+  const [selectedClassFilter, setSelectedClassFilter] = useState<string>(
+    !isAdmin && userKelas ? userKelas : 'SEMUA'
+  );
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -50,19 +58,19 @@ export const DaftarMuridView: React.FC<DaftarMuridViewProps> = ({
   // Form State: Identitas Murid Bimbingan
   const [nama, setNama] = useState('');
   const [nisn, setNisn] = useState('');
-  const [kelas, setKelas] = useState('VIII E');
+  const [kelas, setKelas] = useState(!isAdmin && userKelas ? userKelas : 'VIII E');
   const [jenisKelamin, setJenisKelamin] = useState<JenisKelamin>('Laki-laki');
   const [kontakOrangTua, setKontakOrangTua] = useState('');
-  const [nipGuruWali, setNipGuruWali] = useState('');
+  const [nipGuruWali, setNipGuruWali] = useState(!isAdmin ? userNip : '');
 
   const resetForm = () => {
     setEditingId(null);
     setNama('');
     setNisn('');
-    setKelas('VIII E');
+    setKelas(!isAdmin && userKelas ? userKelas : 'VIII E');
     setJenisKelamin('Laki-laki');
     setKontakOrangTua('');
-    setNipGuruWali('');
+    setNipGuruWali(!isAdmin ? userNip : '');
   };
 
   const handleOpenAddModal = () => {
@@ -88,21 +96,23 @@ export const DaftarMuridView: React.FC<DaftarMuridViewProps> = ({
       return;
     }
 
+    const assignedKelas = !isAdmin && userKelas ? userKelas : kelas;
+
     // Match Guru Wali by class or assigned NIP
-    let matchedGuru = guruList.find((g) => g.nip === nipGuruWali);
+    let matchedGuru = guruList.find((g) => g.nip === (nipGuruWali || userNip));
     if (!matchedGuru) {
-      matchedGuru = guruList.find((g) => g.kelasWali === kelas);
+      matchedGuru = guruList.find((g) => g.kelasWali === assignedKelas);
     }
 
     const updatedMurid: MuridBimbingan = {
       id: editingId || `murid-${Date.now()}`,
       nisn: nisn.trim(),
       nama: nama.trim(),
-      kelas,
+      kelas: assignedKelas,
       jenisKelamin,
       kontakOrangTua: kontakOrangTua.trim() || '-',
-      nipGuruWali: matchedGuru?.nip || nipGuruWali,
-      namaGuruWali: matchedGuru?.nama || 'Guru Wali Kelas ' + kelas
+      nipGuruWali: matchedGuru?.nip || (currentUser?.nip || nipGuruWali),
+      namaGuruWali: matchedGuru?.nama || (currentUser?.name || 'Guru Wali Kelas ' + assignedKelas)
     };
 
     onSaveMurid(updatedMurid);
@@ -123,13 +133,15 @@ export const DaftarMuridView: React.FC<DaftarMuridViewProps> = ({
         return;
       }
 
-      // Automatically map guru wali for each parsed student
+      // If Guru Wali, enforce teacher's class
       const mapped = parsed.map((m) => {
-        const matched = guruList.find((g) => g.kelasWali === m.kelas);
+        const studentKelas = !isAdmin && userKelas ? userKelas : m.kelas;
+        const matched = guruList.find((g) => g.kelasWali === studentKelas);
         return {
           ...m,
-          nipGuruWali: matched?.nip,
-          namaGuruWali: matched?.nama || 'Guru Wali Kelas ' + m.kelas
+          kelas: studentKelas,
+          nipGuruWali: !isAdmin && userNip ? userNip : (matched?.nip || m.nipGuruWali),
+          namaGuruWali: !isAdmin && currentUser?.name ? currentUser.name : (matched?.nama || 'Guru Wali Kelas ' + studentKelas)
         };
       });
 
@@ -142,12 +154,22 @@ export const DaftarMuridView: React.FC<DaftarMuridViewProps> = ({
     }
   };
 
-  const filteredList = muridList.filter((m) => {
+  const roleBaseMurid = muridList.filter((m) => {
+    if (!isAdmin && userKelas) {
+      return m.kelas === userKelas || m.nipGuruWali === userNip;
+    }
+    return true;
+  });
+
+  const filteredList = roleBaseMurid.filter((m) => {
     const matchesSearch =
       m.nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
       m.nisn.includes(searchTerm) ||
       m.kelas.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesClass = selectedClassFilter === 'SEMUA' || m.kelas === selectedClassFilter;
+    const matchesClass =
+      !isAdmin && userKelas
+        ? true
+        : selectedClassFilter === 'SEMUA' || m.kelas === selectedClassFilter;
     return matchesSearch && matchesClass;
   });
 
@@ -158,11 +180,19 @@ export const DaftarMuridView: React.FC<DaftarMuridViewProps> = ({
         <div>
           <div className="flex items-center space-x-2 text-xs font-semibold text-blue-600 mb-1">
             <GraduationCap className="w-4 h-4" />
-            <span>Manajemen Data Peserta Didik</span>
+            <span>
+              {isAdmin
+                ? 'Manajemen Data Peserta Didik'
+                : `Bimbingan Kelas ${userKelas} • ${currentUser?.name}`}
+            </span>
           </div>
-          <h2 className="text-2xl font-bold text-slate-800">Daftar Bimbingan Murid</h2>
+          <h2 className="text-2xl font-bold text-slate-800">
+            {isAdmin ? 'Daftar Bimbingan Murid' : `Daftar Murid Bimbingan Kelas ${userKelas}`}
+          </h2>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Identitas Murid Bimbingan: Tersinkronisasi dengan Jurnal & Rekap Kehadiran (Kelas VII A s/d IX E)
+            {isAdmin
+              ? 'Identitas Murid Bimbingan: Tersinkronisasi dengan Jurnal & Rekap Kehadiran (Kelas VII A s/d IX E)'
+              : `Menampilkan seluruh siswa bimbingan di bawah perwalian Anda pada Kelas ${userKelas}`}
           </p>
         </div>
 
@@ -204,7 +234,16 @@ export const DaftarMuridView: React.FC<DaftarMuridViewProps> = ({
           </button>
 
           <button
-            onClick={() => exportMuridListToPDF(filteredList, selectedClassFilter !== 'SEMUA' ? selectedClassFilter : undefined)}
+            onClick={() =>
+              exportMuridListToPDF(
+                filteredList,
+                !isAdmin && userKelas
+                  ? userKelas
+                  : selectedClassFilter !== 'SEMUA'
+                  ? selectedClassFilter
+                  : undefined
+              )
+            }
             className="px-3 py-2 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-medium text-xs flex items-center space-x-1.5 transition-all shadow-xs"
             title="Download PDF"
           >
@@ -231,26 +270,36 @@ export const DaftarMuridView: React.FC<DaftarMuridViewProps> = ({
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Cari Nama Murid, NISN, atau Kelas..."
+              placeholder={
+                isAdmin
+                  ? 'Cari Nama Murid, NISN, atau Kelas...'
+                  : `Cari Nama Murid atau NISN Kelas ${userKelas}...`
+              }
               className="w-full bg-slate-50 border border-slate-300 rounded-lg pl-9 pr-4 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-blue-500"
             />
           </div>
 
-          <div className="flex items-center space-x-1.5 shrink-0">
-            <Filter className="w-3.5 h-3.5 text-slate-400" />
-            <select
-              value={selectedClassFilter}
-              onChange={(e) => setSelectedClassFilter(e.target.value)}
-              className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-500"
-            >
-              <option value="SEMUA">Semua Kelas (VII A - IX E)</option>
-              {ALL_CLASSES.map((k) => (
-                <option key={k} value={k}>
-                  Kelas {k}
-                </option>
-              ))}
-            </select>
-          </div>
+          {isAdmin ? (
+            <div className="flex items-center space-x-1.5 shrink-0">
+              <Filter className="w-3.5 h-3.5 text-slate-400" />
+              <select
+                value={selectedClassFilter}
+                onChange={(e) => setSelectedClassFilter(e.target.value)}
+                className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-500"
+              >
+                <option value="SEMUA">Semua Kelas (VII A - IX E)</option>
+                {ALL_CLASSES.map((k) => (
+                  <option key={k} value={k}>
+                    Kelas {k}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold shrink-0">
+              Kelas {userKelas}
+            </div>
+          )}
         </div>
 
         <div className="text-xs text-slate-500 font-medium">
@@ -388,19 +437,28 @@ export const DaftarMuridView: React.FC<DaftarMuridViewProps> = ({
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">
-                    Kelas (VII A s/d IX E) <span className="text-rose-500">*</span>
+                    Kelas <span className="text-rose-500">*</span>
                   </label>
-                  <select
-                    value={kelas}
-                    onChange={(e) => setKelas(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-500"
-                  >
-                    {ALL_CLASSES.map((k) => (
-                      <option key={k} value={k}>
-                        Kelas {k}
-                      </option>
-                    ))}
-                  </select>
+                  {isAdmin ? (
+                    <select
+                      value={kelas}
+                      onChange={(e) => setKelas(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-500"
+                    >
+                      {ALL_CLASSES.map((k) => (
+                        <option key={k} value={k}>
+                          Kelas {k}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      disabled
+                      value={`Kelas ${userKelas}`}
+                      className="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 font-bold"
+                    />
+                  )}
                 </div>
               </div>
 
@@ -433,23 +491,25 @@ export const DaftarMuridView: React.FC<DaftarMuridViewProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">
-                  Pilih Guru Wali Pembimbing
-                </label>
-                <select
-                  value={nipGuruWali}
-                  onChange={(e) => setNipGuruWali(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-500"
-                >
-                  <option value="">-- Otomatis Sesuai Kelas Wali --</option>
-                  {guruList.map((g) => (
-                    <option key={g.id} value={g.nip}>
-                      {g.nama} ({g.nip}) - Wali {g.kelasWali}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {isAdmin && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">
+                    Pilih Guru Wali Pembimbing
+                  </label>
+                  <select
+                    value={nipGuruWali}
+                    onChange={(e) => setNipGuruWali(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-500"
+                  >
+                    <option value="">-- Otomatis Sesuai Kelas Wali --</option>
+                    {guruList.map((g) => (
+                      <option key={g.id} value={g.nip}>
+                        {g.nama} ({g.nip}) - Wali {g.kelasWali}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Tombol Simpan */}
               <div className="pt-3 flex items-center justify-end space-x-2 border-t border-slate-200">
