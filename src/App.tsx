@@ -48,6 +48,7 @@ import { LoginScreen } from './components/LoginScreen';
 import { LogoutConfirmModal } from './components/LogoutConfirmModal';
 import { NotificationToast, ToastMessage } from './components/NotificationToast';
 
+import { DashboardView } from './components/DashboardView';
 import { ProgramKegiatanView } from './components/ProgramKegiatanView';
 import { DaftarGuruView } from './components/DaftarGuruView';
 import { DaftarMuridView } from './components/DaftarMuridView';
@@ -69,7 +70,7 @@ export default function App() {
   const [isCloudSyncing, setIsCloudSyncing] = useState<boolean>(false);
 
   // UI States
-  const [activeTab, setActiveTab] = useState<ActiveTab>('program');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
   const [logoutModalOpen, setLogoutModalOpen] = useState<boolean>(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
@@ -315,6 +316,18 @@ export default function App() {
 
         {/* Dynamic Content Views */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto min-w-0">
+          {activeTab === 'dashboard' && (
+            <DashboardView
+              guruList={guruList}
+              muridList={muridList}
+              jurnalList={jurnalList}
+              rekapList={rekapList}
+              schoolSettings={schoolSettings}
+              currentUser={currentUser}
+              onNavigateTab={setActiveTab}
+            />
+          )}
+
           {activeTab === 'program' && <ProgramKegiatanView />}
 
           {activeTab === 'guru' && (

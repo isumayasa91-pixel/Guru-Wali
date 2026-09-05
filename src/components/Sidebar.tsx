@@ -1,8 +1,8 @@
 import React from 'react';
 import { User } from '../types';
-import { BookOpen, Users, GraduationCap, FileText, CalendarCheck, Shield, Settings, LogOut, LogIn, UserCheck } from 'lucide-react';
+import { LayoutDashboard, BookOpen, Users, GraduationCap, FileText, CalendarCheck, Shield, Settings, LogOut, LogIn, UserCheck } from 'lucide-react';
 
-export type ActiveTab = 'program' | 'guru' | 'murid' | 'jurnal' | 'rekap' | 'settings';
+export type ActiveTab = 'dashboard' | 'program' | 'guru' | 'murid' | 'jurnal' | 'rekap' | 'settings';
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -28,6 +28,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenLoginModal
 }) => {
   const menuItems = [
+    {
+      id: 'dashboard' as ActiveTab,
+      label: 'Dashboard',
+      subtitle: 'Ringkasan Laporan Keseluruhan',
+      icon: LayoutDashboard,
+      badge: 'Utama'
+    },
     {
       id: 'program' as ActiveTab,
       label: 'Program Kegiatan',
