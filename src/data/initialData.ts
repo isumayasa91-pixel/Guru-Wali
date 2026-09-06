@@ -60,6 +60,7 @@ export const INITIAL_GURU_WALI: GuruWali[] = [
     nip: '198501122010011002',
     nama: 'Budi Santoso, S.Pd.',
     kelasWali: 'VIII E',
+    kelasWali2: 'VIII A',
     noHp: '081234567890',
     email: 'budi.santoso@sekolah.sch.id',
     status: 'Aktif'
@@ -69,6 +70,7 @@ export const INITIAL_GURU_WALI: GuruWali[] = [
     nip: '198803152012012005',
     nama: 'Siti Aminah, M.Pd.',
     kelasWali: 'IX A',
+    kelasWali2: 'IX B',
     noHp: '082198765432',
     email: 'siti.aminah@sekolah.sch.id',
     status: 'Aktif'

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { RekapKehadiran, MuridBimbingan, User } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { RekapKehadiran, MuridBimbingan, GuruWali, User, getGuruClassList, getGuruClassDisplay } from '../types';
 import { ALL_CLASSES, MONTHS_LIST } from '../data/initialData';
 import { exportRekapKehadiranToPDF } from '../utils/pdfGenerator';
 import {
@@ -17,6 +17,7 @@ import {
 interface RekapKehadiranViewProps {
   rekapList: RekapKehadiran[];
   muridList: MuridBimbingan[];
+  guruList?: GuruWali[];
   currentUser: User | null;
   onSaveRekapBatch: (records: RekapKehadiran[]) => void;
   showToast: (title: string, message?: string, type?: 'success' | 'error' | 'info') => void;
@@ -25,18 +26,22 @@ interface RekapKehadiranViewProps {
 export const RekapKehadiranView: React.FC<RekapKehadiranViewProps> = ({
   rekapList,
   muridList,
+  guruList = [],
   currentUser,
   onSaveRekapBatch,
   showToast
 }) => {
   const isAdmin = currentUser?.role === 'admin';
-  const userKelas = currentUser?.kelasWali || '';
+  const userClasses = useMemo(() => getGuruClassList(currentUser, guruList), [currentUser, guruList]);
+  const userClassDisplay = useMemo(() => getGuruClassDisplay(currentUser, guruList), [currentUser, guruList]);
 
   // Selectors
   const currentMonthIdx = new Date().getMonth();
   const [bulan, setBulan] = useState<string>(MONTHS_LIST[currentMonthIdx] || 'September');
   const [tahun, setTahun] = useState<number>(new Date().getFullYear());
-  const [kelas, setKelas] = useState<string>(!isAdmin && userKelas ? userKelas : 'VIII E');
+  const [kelas, setKelas] = useState<string>(
+    !isAdmin && userClasses.length > 0 ? userClasses[0] : 'VIII E'
+  );
 
   // Search filter
   const [searchTerm, setSearchTerm] = useState('');
@@ -46,7 +51,7 @@ export const RekapKehadiranView: React.FC<RekapKehadiranViewProps> = ({
     [studentId: string]: { sakit: number; izin: number; tanpaKeterangan: number };
   }>({});
 
-  const effectiveKelas = !isAdmin && userKelas ? userKelas : kelas;
+  const effectiveKelas = !isAdmin && userClasses.length === 1 ? userClasses[0] : kelas;
 
   // Filter students by selected class
   const classStudents = muridList.filter((m) => m.kelas === effectiveKelas);
@@ -106,7 +111,7 @@ export const RekapKehadiranView: React.FC<RekapKehadiranViewProps> = ({
         id: existing ? existing.id : `rekap-${student.id}-${bulan}-${tahun}`,
         bulan,
         tahun,
-        kelas,
+        kelas: effectiveKelas,
         studentId: student.id,
         namaMurid: student.nama,
         nisn: student.nisn,
@@ -121,7 +126,7 @@ export const RekapKehadiranView: React.FC<RekapKehadiranViewProps> = ({
     onSaveRekapBatch(recordsToSave);
     showToast(
       'Berhasil Disimpan',
-      `Rekap Kehadiran Bulan ${bulan} ${tahun} Kelas ${kelas} berhasil disimpan!`,
+      `Rekap Kehadiran Bulan ${bulan} ${tahun} Kelas ${effectiveKelas} berhasil disimpan!`,
       'success'
     );
   };
@@ -168,16 +173,16 @@ export const RekapKehadiranView: React.FC<RekapKehadiranViewProps> = ({
             <span>
               {isAdmin
                 ? 'Rekapitulasi Kehadiran & Presensi Murid'
-                : `Rekap Kehadiran Kelas ${userKelas} • ${currentUser?.name}`}
+                : `Rekap Kehadiran ${userClassDisplay} • ${currentUser?.name}`}
             </span>
           </div>
           <h2 className="text-2xl font-bold text-slate-800">
-            {isAdmin ? 'Rekap Kehadiran Murid' : `Rekap Kehadiran Siswa Kelas ${userKelas}`}
+            {isAdmin ? 'Rekap Kehadiran Murid' : `Rekap Kehadiran Siswa ${userClassDisplay}`}
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
             {isAdmin
               ? 'Input dan simpan rekapitulasi jumlah hari Sakit, Izin, dan Tanpa Keterangan per bulan.'
-              : `Input dan simpan rekapitulasi presensi bulanan siswa binaan Kelas ${userKelas}.`}
+              : `Input dan simpan rekapitulasi presensi bulanan siswa binaan ${userClassDisplay}.`}
           </p>
         </div>
 
@@ -242,9 +247,21 @@ export const RekapKehadiranView: React.FC<RekapKehadiranViewProps> = ({
                 </option>
               ))}
             </select>
+          ) : userClasses.length > 1 ? (
+            <select
+              value={kelas}
+              onChange={(e) => setKelas(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-500 font-bold text-blue-600"
+            >
+              {userClasses.map((k) => (
+                <option key={k} value={k}>
+                  Kelas {k}
+                </option>
+              ))}
+            </select>
           ) : (
             <div className="w-full bg-blue-50 border border-blue-200 rounded-lg px-3.5 py-2.5 text-xs text-blue-700 font-bold flex items-center justify-between">
-              <span>Kelas {userKelas}</span>
+              <span>Kelas {userClasses[0] || 'Bimbingan'}</span>
               <span className="text-[10px] font-normal bg-blue-100 px-2 py-0.5 rounded text-blue-800">Wali Kelas Aktif</span>
             </div>
           )}

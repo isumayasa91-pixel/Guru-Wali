@@ -5,7 +5,9 @@ import {
   JurnalBimbingan,
   RekapKehadiran,
   User,
-  SchoolSettings
+  SchoolSettings,
+  getGuruClassList,
+  isSameGuru
 } from './types';
 import {
   getStoredGuruWali,
@@ -155,17 +157,56 @@ export default function App() {
 
   // Guru Wali CRUD
   const handleSaveGuru = (guru: GuruWali) => {
-    const exists = guruList.some((g) => g.id === guru.id);
+    const existingByIdIndex = guruList.findIndex((g) => g.id === guru.id);
+    const existingSameGuruIndex = guruList.findIndex(
+      (g) => g.id !== guru.id && isSameGuru(g, guru)
+    );
+
     let updated: GuruWali[];
-    if (exists) {
-      updated = guruList.map((g) => (g.id === guru.id ? guru : g));
+
+    if (existingByIdIndex >= 0) {
+      updated = [...guruList];
+      updated[existingByIdIndex] = guru;
+    } else if (existingSameGuruIndex >= 0) {
+      // Guru with same name or NIP was previously registered with another class
+      const existingGuru = guruList[existingSameGuruIndex];
+      const allClasses = getGuruClassList(existingGuru, [guru]);
+
+      const mergedGuru: GuruWali = {
+        ...existingGuru,
+        nama: guru.nama || existingGuru.nama,
+        nip: guru.nip || existingGuru.nip,
+        kelasWali: allClasses[0] || existingGuru.kelasWali,
+        kelasWali2: allClasses[1] || (guru.kelasWali !== existingGuru.kelasWali ? guru.kelasWali : existingGuru.kelasWali2),
+        noHp: guru.noHp && guru.noHp !== '-' ? guru.noHp : existingGuru.noHp,
+        email: guru.email && guru.email.includes('@') ? guru.email : existingGuru.email,
+        status: guru.status || existingGuru.status
+      };
+
+      updated = [...guruList];
+      updated[existingSameGuruIndex] = mergedGuru;
     } else {
       updated = [guru, ...guruList];
     }
+
     setGuruList(updated);
     saveStoredGuruWali(updated);
     triggerSyncIndicator();
     syncSaveGuru(guru);
+
+    // If currentUser is currently logged in as this teacher, update session state with both classes immediately
+    if (currentUser && isSameGuru(currentUser, guru)) {
+      const userClasses = getGuruClassList(guru, updated);
+      const updatedUser: User = {
+        ...currentUser,
+        name: guru.nama,
+        nip: guru.nip,
+        kelasWali: userClasses[0] || guru.kelasWali,
+        kelasWali2: userClasses[1] || guru.kelasWali2
+      };
+      setCurrentUser(updatedUser);
+      saveStoredUser(updatedUser);
+    }
   };
 
   const handleDeleteGuru = (id: string) => {
@@ -177,11 +218,57 @@ export default function App() {
   };
 
   const handleImportGuru = (imported: GuruWali[]) => {
-    const updated = [...imported, ...guruList];
+    const mergedMap = new Map<string, GuruWali>();
+
+    // Seed with existing teachers
+    guruList.forEach((g) => {
+      mergedMap.set(g.id, { ...g });
+    });
+
+    // Merge imported entries
+    imported.forEach((newGuru) => {
+      const existingKey = Array.from(mergedMap.keys()).find((k) => {
+        const item = mergedMap.get(k)!;
+        return item.id === newGuru.id || isSameGuru(item, newGuru);
+      });
+
+      if (existingKey) {
+        const existing = mergedMap.get(existingKey)!;
+        const allClasses = getGuruClassList(existing, [newGuru]);
+        mergedMap.set(existingKey, {
+          ...existing,
+          nama: newGuru.nama || existing.nama,
+          nip: newGuru.nip || existing.nip,
+          kelasWali: allClasses[0] || existing.kelasWali,
+          kelasWali2: allClasses[1] || (newGuru.kelasWali !== existing.kelasWali ? newGuru.kelasWali : existing.kelasWali2),
+          noHp: newGuru.noHp && newGuru.noHp !== '-' ? newGuru.noHp : existing.noHp,
+          email: newGuru.email && newGuru.email.includes('@') ? newGuru.email : existing.email,
+          status: newGuru.status || existing.status
+        });
+      } else {
+        mergedMap.set(newGuru.id, newGuru);
+      }
+    });
+
+    const updated = Array.from(mergedMap.values());
     setGuruList(updated);
     saveStoredGuruWali(updated);
     triggerSyncIndicator();
     syncBatchGuru(imported);
+
+    // If currentUser is logged in, refresh classes
+    if (currentUser && currentUser.role === 'guru') {
+      const userClasses = getGuruClassList(currentUser, updated);
+      if (userClasses.length > 0) {
+        const updatedUser: User = {
+          ...currentUser,
+          kelasWali: userClasses[0],
+          kelasWali2: userClasses[1]
+        };
+        setCurrentUser(updatedUser);
+        saveStoredUser(updatedUser);
+      }
+    }
   };
 
   // Murid Bimbingan CRUD
@@ -293,6 +380,7 @@ export default function App() {
       {/* Top Header Navbar */}
       <Navbar
         currentUser={currentUser}
+        guruList={guruList}
         onLogout={handlePromptLogout}
         onOpenLoginModal={() => {}}
         isCloudSyncing={isCloudSyncing}
@@ -307,8 +395,31 @@ export default function App() {
           setActiveTab={setActiveTab}
           isAdmin={isAdmin}
           guruCount={guruList.length}
-          muridCount={muridList.length}
-          jurnalCount={jurnalList.length}
+          guruList={guruList}
+          muridCount={
+            isAdmin
+              ? muridList.length
+              : muridList.filter((m) => {
+                  const myClasses = getGuruClassList(currentUser, guruList);
+                  return (
+                    myClasses.includes(m.kelas) ||
+                    m.nipGuruWali === currentUser?.nip ||
+                    isSameGuru({ nip: m.nipGuruWali, name: m.namaGuruWali }, currentUser)
+                  );
+                }).length
+          }
+          jurnalCount={
+            isAdmin
+              ? jurnalList.length
+              : jurnalList.filter((j) => {
+                  const myClasses = getGuruClassList(currentUser, guruList);
+                  return (
+                    myClasses.includes(j.kelas) ||
+                    j.nipGuruWali === currentUser?.nip ||
+                    isSameGuru({ nip: j.nipGuruWali, name: j.namaGuruWali }, currentUser)
+                  );
+                }).length
+          }
           currentUser={currentUser}
           onLogout={handlePromptLogout}
           onOpenLoginModal={() => {}}
@@ -356,6 +467,7 @@ export default function App() {
             <JurnalBimbinganView
               jurnalList={jurnalList}
               muridList={muridList}
+              guruList={guruList}
               currentUser={currentUser}
               onSaveJurnal={handleSaveJurnal}
               onDeleteJurnal={handleDeleteJurnal}
@@ -367,6 +479,7 @@ export default function App() {
             <RekapKehadiranView
               rekapList={rekapList}
               muridList={muridList}
+              guruList={guruList}
               currentUser={currentUser}
               onSaveRekapBatch={handleSaveRekapBatch}
               showToast={showToast}

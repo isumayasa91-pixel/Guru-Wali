@@ -1,11 +1,14 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   GuruWali,
   MuridBimbingan,
   JurnalBimbingan,
   RekapKehadiran,
   User,
-  SchoolSettings
+  SchoolSettings,
+  getGuruClassList,
+  getGuruClassDisplay,
+  isSameGuru
 } from '../types';
 import { ActiveTab } from './Sidebar';
 import { PROGRAM_PILARS } from '../data/initialData';
@@ -54,30 +57,41 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 }) => {
   const isAdmin = currentUser?.role === 'admin';
   const isGuru = currentUser?.role === 'guru';
-  const userKelas = currentUser?.kelasWali || '';
+  const userClasses = useMemo(() => getGuruClassList(currentUser, guruList), [currentUser, guruList]);
+  const userClassDisplay = useMemo(() => getGuruClassDisplay(currentUser, guruList), [currentUser, guruList]);
   const userNip = currentUser?.nip || '';
 
-  // For Guru Wali, data is strictly isolated to their own class/students
+  // For Guru Wali, data is strictly isolated to their own classes/students
   const filteredMurid = useMemo(() => {
-    if (!isAdmin && userKelas) {
-      return muridList.filter((m) => m.kelas === userKelas || m.nipGuruWali === userNip);
+    if (!isAdmin && userClasses.length > 0) {
+      return muridList.filter(
+        (m) =>
+          userClasses.includes(m.kelas) ||
+          m.nipGuruWali === userNip ||
+          isSameGuru({ nip: m.nipGuruWali, name: m.namaGuruWali }, currentUser)
+      );
     }
     return muridList;
-  }, [muridList, isAdmin, userKelas, userNip]);
+  }, [muridList, isAdmin, userClasses, userNip, currentUser]);
 
   const filteredJurnal = useMemo(() => {
-    if (!isAdmin && userKelas) {
-      return jurnalList.filter((j) => j.kelas === userKelas || j.nipGuruWali === userNip);
+    if (!isAdmin && userClasses.length > 0) {
+      return jurnalList.filter(
+        (j) =>
+          userClasses.includes(j.kelas) ||
+          j.nipGuruWali === userNip ||
+          isSameGuru({ nip: j.nipGuruWali, name: j.namaGuruWali }, currentUser)
+      );
     }
     return jurnalList;
-  }, [jurnalList, isAdmin, userKelas, userNip]);
+  }, [jurnalList, isAdmin, userClasses, userNip, currentUser]);
 
   const filteredRekap = useMemo(() => {
-    if (!isAdmin && userKelas) {
-      return rekapList.filter((r) => r.kelas === userKelas);
+    if (!isAdmin && userClasses.length > 0) {
+      return rekapList.filter((r) => userClasses.includes(r.kelas));
     }
     return rekapList;
-  }, [rekapList, isAdmin, userKelas]);
+  }, [rekapList, isAdmin, userClasses]);
 
   // Statistics calculation
   const totalGuruAktif = guruList.filter((g) => g.status === 'Aktif').length;
@@ -109,20 +123,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const totalAlpa = filteredRekap.reduce((acc, r) => acc + (Number(r.tanpaKeterangan) || 0), 0);
   const totalKetidakhadiran = totalSakit + totalIzin + totalAlpa;
 
-  // Unique Classes list
+  // Unique Classes list (Shows all assigned classes for Guru Wali)
   const classList = useMemo(() => {
-    if (!isAdmin && userKelas) {
-      return [userKelas];
+    if (!isAdmin && userClasses.length > 0) {
+      return userClasses;
     }
     const classes = Array.from(new Set(muridList.map((m) => m.kelas).filter(Boolean))).sort();
     return classes;
-  }, [muridList, isAdmin, userKelas]);
+  }, [muridList, isAdmin, userClasses]);
 
   // Group murid by class
   const classBreakdown = useMemo(() => {
     return classList.map((kelas) => {
       const muridInClass = muridList.filter((m) => m.kelas === kelas);
-      const wali = guruList.find((g) => g.kelasWali === kelas);
+      const wali = guruList.find((g) => g.kelasWali === kelas || g.kelasWali2 === kelas);
       const jurnalInClass = jurnalList.filter((j) => j.kelas === kelas);
       const rekapInClass = rekapList.filter((r) => r.kelas === kelas);
       const sakit = rekapInClass.reduce((a, b) => a + (Number(b.sakit) || 0), 0);
@@ -131,8 +145,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       return {
         kelas,
-        wali: wali ? wali.nama : (isGuru && userKelas === kelas ? (currentUser?.name || 'Anda') : 'Belum Ditentukan'),
-        waliNip: wali ? wali.nip : (isGuru && userKelas === kelas ? userNip : '-'),
+        wali: wali ? wali.nama : (isGuru && userClasses.includes(kelas) ? (currentUser?.name || 'Anda') : 'Belum Ditentukan'),
+        waliNip: wali ? wali.nip : (isGuru && userClasses.includes(kelas) ? userNip : '-'),
         waliHp: wali ? wali.noHp : '-',
         totalMurid: muridInClass.length,
         laki: muridInClass.filter((m) => m.jenisKelamin === 'Laki-laki').length,
@@ -141,7 +155,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         totalAbsen: sakit + izin + alpa
       };
     });
-  }, [classList, muridList, guruList, jurnalList, rekapList, isGuru, userKelas, currentUser, userNip]);
+  }, [classList, muridList, guruList, jurnalList, rekapList, isGuru, userClasses, currentUser, userNip]);
 
   // Recent 5 Journal entries
   const recentJurnal = useMemo(() => {
@@ -190,14 +204,49 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       .slice(0, 5);
   }, [filteredRekap]);
 
-  // Greeting based on hour
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 11) return 'Selamat Pagi';
-    if (hour < 15) return 'Selamat Siang';
-    if (hour < 18) return 'Selamat Sore';
-    return 'Selamat Malam';
+  // Helper to get greeting based on WITA (Asia/Makassar) time
+  const getGreetingWITA = () => {
+    try {
+      const now = new Date();
+      // Extract hour and minute in WITA
+      const hourStr = new Intl.DateTimeFormat('id-ID', {
+        timeZone: 'Asia/Makassar',
+        hour: 'numeric',
+        hour12: false
+      }).format(now);
+      const hour = parseInt(hourStr, 10);
+
+      // Pagi: 04:00 - 10:59
+      if (hour >= 4 && hour < 11) {
+        return 'Selamat Pagi';
+      }
+      // Siang: 11:00 - 14:59
+      if (hour >= 11 && hour < 15) {
+        return 'Selamat Siang';
+      }
+      // Sore: 15:00 - 18:29
+      if (hour >= 15 && hour < 18) {
+        return 'Selamat Sore';
+      }
+      // Malam: 18:30 - 03:59
+      return 'Selamat Malam';
+    } catch {
+      const hour = new Date().getHours();
+      if (hour >= 4 && hour < 11) return 'Selamat Pagi';
+      if (hour >= 11 && hour < 15) return 'Selamat Siang';
+      if (hour >= 15 && hour < 18) return 'Selamat Sore';
+      return 'Selamat Malam';
+    }
   };
+
+  const [greeting, setGreeting] = useState<string>(getGreetingWITA);
+
+  useEffect(() => {
+    const update = () => setGreeting(getGreetingWITA());
+    update();
+    const interval = setInterval(update, 30000); // Check every 30 seconds
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -210,12 +259,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <span>Ringkasan Eksekutif & Laporan Menyeluruh</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
-              {getGreeting()}, {currentUser?.name || 'Bapak/Ibu Pendidik'}
+              {greeting}, {currentUser?.name || 'Bapak/Ibu Pendidik'}
             </h1>
             <p className="text-blue-100 text-xs sm:text-sm max-w-2xl leading-relaxed">
               {isAdmin
                 ? `Selamat datang di Dashboard Utama Sistem Informasi Guru Wali ${schoolSettings.namaSekolah || 'Sekolah'}. Pantau perkembangan murid, jurnal pembinaan, dan rekapitulasi secara terpusat.`
-                : `Selamat datang di Dashboard Guru Wali Kelas ${userKelas} - ${schoolSettings.namaSekolah || 'Sekolah'}. Memantau catatan perkembangan dan presensi murid bimbingan Anda.`}
+                : `Selamat datang di Dashboard Guru Wali ${userClassDisplay || 'Kelas Bimbingan'} - ${schoolSettings.namaSekolah || 'Sekolah'}. Memantau catatan perkembangan dan presensi murid bimbingan Anda.`}
             </p>
           </div>
 
@@ -224,7 +273,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="bg-white/15 border border-white/20 px-3.5 py-2 rounded-xl text-xs flex items-center space-x-2 text-white">
               <ShieldCheck className="w-4 h-4 text-emerald-300" />
               <span className="font-medium">
-                {isAdmin ? 'Akun Administrator' : `Guru Wali Kelas ${userKelas || 'Guru Mapel'}`}
+                {isAdmin ? 'Akun Administrator' : `Guru Wali ${userClassDisplay || 'Bimbingan'}`}
               </span>
             </div>
           </div>
@@ -269,7 +318,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   </span>
                 </div>
                 <p className="text-xs font-semibold text-blue-600 mt-1">
-                  Bimbingan Kelas {userKelas}
+                  Bimbingan {userClassDisplay || 'Kelas Terdaftar'}
                 </p>
               </>
             )}

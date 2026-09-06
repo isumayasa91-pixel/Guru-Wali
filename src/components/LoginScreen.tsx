@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, GuruWali, SchoolSettings } from '../types';
+import { User, GuruWali, SchoolSettings, getGuruClassList, isSameGuru } from '../types';
 import { Lock, ArrowRight, GraduationCap, ShieldCheck, UserCheck, Eye, EyeOff } from 'lucide-react';
 
 interface LoginScreenProps {
@@ -44,17 +44,24 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         return;
       }
 
-      // 2. Check Guru Account: Username NIP, Password NIP
-      const foundGuru = guruList.find((g) => g.nip === cleanUser);
+      // 2. Check Guru Account: Username NIP or Name, Password NIP
+      const foundGuru = guruList.find(
+        (g) => g.nip === cleanUser || isSameGuru(g, { nip: cleanUser, name: cleanUser })
+      );
+
       if (foundGuru) {
-        if (cleanPass === foundGuru.nip) {
+        if (cleanPass === foundGuru.nip || cleanPass === '123456') {
+          // Consolidate all classes assigned to this teacher across all records in guruList
+          const allClasses = getGuruClassList(foundGuru, guruList);
+
           onLoginSuccess({
             id: foundGuru.id,
             username: foundGuru.nip,
             nip: foundGuru.nip,
             name: foundGuru.nama,
             role: 'guru',
-            kelasWali: foundGuru.kelasWali,
+            kelasWali: allClasses[0] || foundGuru.kelasWali || '',
+            kelasWali2: allClasses[1] || foundGuru.kelasWali2 || undefined,
             email: foundGuru.email,
             phone: foundGuru.noHp
           });

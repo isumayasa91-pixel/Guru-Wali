@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { JurnalBimbingan, MuridBimbingan, JenisBimbingan, User } from '../types';
+import { JurnalBimbingan, MuridBimbingan, GuruWali, JenisBimbingan, User, getGuruClassList, getGuruClassDisplay, isSameGuru } from '../types';
 import { ALL_CLASSES } from '../data/initialData';
 import { exportJurnalToPDF } from '../utils/pdfGenerator';
 import {
@@ -21,6 +21,7 @@ import {
 interface JurnalBimbinganViewProps {
   jurnalList: JurnalBimbingan[];
   muridList: MuridBimbingan[];
+  guruList?: GuruWali[];
   currentUser: User | null;
   onSaveJurnal: (jurnal: JurnalBimbingan) => void;
   onDeleteJurnal: (id: string) => void;
@@ -30,22 +31,29 @@ interface JurnalBimbinganViewProps {
 export const JurnalBimbinganView: React.FC<JurnalBimbinganViewProps> = ({
   jurnalList,
   muridList,
+  guruList = [],
   currentUser,
   onSaveJurnal,
   onDeleteJurnal,
   showToast
 }) => {
   const isAdmin = currentUser?.role === 'admin';
-  const userKelas = currentUser?.kelasWali || '';
+  const userClasses = useMemo(() => getGuruClassList(currentUser, guruList), [currentUser, guruList]);
+  const userClassDisplay = useMemo(() => getGuruClassDisplay(currentUser, guruList), [currentUser, guruList]);
   const userNip = currentUser?.nip || '';
 
   // Filter students available for bimbingan based on user role
   const availableStudents = useMemo(() => {
-    if (!isAdmin && userKelas) {
-      return muridList.filter((m) => m.kelas === userKelas || m.nipGuruWali === userNip);
+    if (!isAdmin && userClasses.length > 0) {
+      return muridList.filter(
+        (m) =>
+          userClasses.includes(m.kelas) ||
+          m.nipGuruWali === userNip ||
+          isSameGuru({ nip: m.nipGuruWali, name: m.namaGuruWali }, currentUser)
+      );
     }
     return muridList;
-  }, [muridList, isAdmin, userKelas, userNip]);
+  }, [muridList, isAdmin, userClasses, userNip, currentUser]);
 
   // Helper to format device date and time
   const getDeviceDate = () => new Date().toISOString().slice(0, 10);
@@ -61,14 +69,16 @@ export const JurnalBimbinganView: React.FC<JurnalBimbinganViewProps> = ({
   const [tanggal, setTanggal] = useState<string>(getDeviceDate());
   const [waktu, setWaktu] = useState<string>(getDeviceTime());
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
-  const [kelas, setKelas] = useState<string>(!isAdmin && userKelas ? userKelas : 'VIII E');
+  const [kelas, setKelas] = useState<string>(
+    !isAdmin && userClasses.length > 0 ? userClasses[0] : 'VIII E'
+  );
   const [jenisBimbingan, setJenisBimbingan] = useState<JenisBimbingan>('Pendampingan Akademik');
   const [topik, setTopik] = useState<string>('');
   const [tindakLanjut, setTindakLanjut] = useState<string>('');
 
   // Table Filters
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterClass, setFilterClass] = useState<string>(!isAdmin && userKelas ? userKelas : 'SEMUA');
+  const [filterClass, setFilterClass] = useState<string>('SEMUA');
   const [filterJenis, setFilterJenis] = useState<string>('SEMUA');
 
   // Set default student if available
@@ -97,7 +107,7 @@ export const JurnalBimbinganView: React.FC<JurnalBimbinganViewProps> = ({
       setKelas(availableStudents[0].kelas);
     } else {
       setSelectedStudentId('');
-      setKelas(!isAdmin && userKelas ? userKelas : 'VIII E');
+      setKelas(!isAdmin && userClasses.length > 0 ? userClasses[0] : 'VIII E');
     }
     setJenisBimbingan('Pendampingan Akademik');
     setTopik('');
@@ -123,6 +133,7 @@ export const JurnalBimbinganView: React.FC<JurnalBimbinganViewProps> = ({
 
     const teacherName = currentUser?.name || 'Guru Wali';
     const teacherNip = currentUser?.nip || (selectedMurid?.nipGuruWali || '-');
+    const targetKelas = selectedMurid ? selectedMurid.kelas : kelas;
 
     const newJurnal: JurnalBimbingan = {
       id: editingId || `jurnal-${Date.now()}`,
@@ -131,7 +142,7 @@ export const JurnalBimbinganView: React.FC<JurnalBimbinganViewProps> = ({
       studentId: selectedStudentId,
       namaMurid,
       nisn,
-      kelas: !isAdmin && userKelas ? userKelas : kelas,
+      kelas: targetKelas,
       jenisBimbingan,
       topik: topik.trim(),
       tindakLanjut: tindakLanjut.trim(),
@@ -158,11 +169,16 @@ export const JurnalBimbinganView: React.FC<JurnalBimbinganViewProps> = ({
   };
 
   const roleBaseJurnal = useMemo(() => {
-    if (!isAdmin && userKelas) {
-      return jurnalList.filter((j) => j.kelas === userKelas || j.nipGuruWali === userNip);
+    if (!isAdmin && userClasses.length > 0) {
+      return jurnalList.filter(
+        (j) =>
+          userClasses.includes(j.kelas) ||
+          j.nipGuruWali === userNip ||
+          isSameGuru({ nip: j.nipGuruWali, name: j.namaGuruWali }, currentUser)
+      );
     }
     return jurnalList;
-  }, [jurnalList, isAdmin, userKelas, userNip]);
+  }, [jurnalList, isAdmin, userClasses, userNip, currentUser]);
 
   const filteredJurnal = roleBaseJurnal.filter((j) => {
     const matchesSearch =
@@ -171,9 +187,7 @@ export const JurnalBimbinganView: React.FC<JurnalBimbinganViewProps> = ({
       j.topik.toLowerCase().includes(searchTerm.toLowerCase()) ||
       j.tindakLanjut.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesClass =
-      !isAdmin && userKelas
-        ? true
-        : filterClass === 'SEMUA' || j.kelas === filterClass;
+      filterClass === 'SEMUA' || j.kelas === filterClass;
     const matchesJenis = filterJenis === 'SEMUA' || j.jenisBimbingan === filterJenis;
     return matchesSearch && matchesClass && matchesJenis;
   });
@@ -188,16 +202,16 @@ export const JurnalBimbinganView: React.FC<JurnalBimbinganViewProps> = ({
             <span>
               {isAdmin
                 ? 'Pencatatan Harian Bimbingan'
-                : `Jurnal Bimbingan Kelas ${userKelas} • ${currentUser?.name}`}
+                : `Jurnal Bimbingan ${userClassDisplay} • ${currentUser?.name}`}
             </span>
           </div>
           <h2 className="text-2xl font-bold text-slate-800">
-            {isAdmin ? 'Jurnal Guru Wali' : `Jurnal Bimbingan Kelas ${userKelas}`}
+            {isAdmin ? 'Jurnal Guru Wali' : `Jurnal Bimbingan Siswa ${userClassDisplay}`}
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
             {isAdmin
               ? 'Dokumentasikan sesi diskusi, kendala akademik, kompetensi, keterampilan, dan pembentukan karakter murid.'
-              : `Dokumentasikan pendampingan dan bimbingan untuk siswa perwalian Kelas ${userKelas}.`}
+              : `Dokumentasikan pendampingan dan bimbingan untuk siswa perwalian ${userClassDisplay}.`}
           </p>
         </div>
 
@@ -314,7 +328,7 @@ export const JurnalBimbinganView: React.FC<JurnalBimbinganViewProps> = ({
                 <input
                   type="text"
                   disabled
-                  value={`Kelas ${userKelas}`}
+                  value={kelas ? `Kelas ${kelas}` : 'Pilih Murid'}
                   className="w-full bg-slate-100 border border-slate-200 rounded-lg px-3.5 py-2.5 text-xs text-slate-700 font-bold"
                 />
               )}
@@ -430,9 +444,26 @@ export const JurnalBimbinganView: React.FC<JurnalBimbinganViewProps> = ({
                   ))}
                 </select>
               </div>
+            ) : userClasses.length > 1 ? (
+              <div className="flex items-center space-x-1.5 text-xs text-slate-500 font-medium">
+                <Filter className="w-3.5 h-3.5" />
+                <span>Kelas:</span>
+                <select
+                  value={filterClass}
+                  onChange={(e) => setFilterClass(e.target.value)}
+                  className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-500 font-medium"
+                >
+                  <option value="SEMUA">Semua ({userClasses.join(', ')})</option>
+                  {userClasses.map((k) => (
+                    <option key={k} value={k}>
+                      Kelas {k}
+                    </option>
+                  ))}
+                </select>
+              </div>
             ) : (
               <div className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold">
-                Kelas {userKelas}
+                {userClasses[0] ? `Kelas ${userClasses[0]}` : 'Bimbingan'}
               </div>
             )}
 

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { User, SchoolSettings } from '../types';
+import { User, GuruWali, SchoolSettings, getGuruClassDisplay } from '../types';
 import { UserCheck, LogOut, Clock, Calendar, GraduationCap, ShieldCheck, UserCog, Cloud } from 'lucide-react';
 
 interface NavbarProps {
   currentUser: User | null;
+  guruList?: GuruWali[];
   onLogout: () => void;
   onOpenLoginModal: () => void;
   isCloudSyncing?: boolean;
@@ -12,6 +13,7 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({
   currentUser,
+  guruList = [],
   onLogout,
   onOpenLoginModal,
   isCloudSyncing = false,
@@ -116,7 +118,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 text-blue-600 font-medium">
-                        <UserCheck className="w-3 h-3" /> Guru Wali ({currentUser.nip})
+                        <UserCheck className="w-3 h-3" /> Guru Wali {getGuruClassDisplay(currentUser, guruList)} ({currentUser.nip})
                       </span>
                     )}
                   </div>

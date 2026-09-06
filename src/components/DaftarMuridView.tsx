@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { MuridBimbingan, GuruWali, JenisKelamin, User } from '../types';
+import React, { useState, useRef, useMemo } from 'react';
+import { MuridBimbingan, GuruWali, JenisKelamin, User, getGuruClassList, getGuruClassDisplay, isSameGuru } from '../types';
 import { ALL_CLASSES } from '../data/initialData';
 import {
   exportMuridToExcel,
@@ -43,13 +43,12 @@ export const DaftarMuridView: React.FC<DaftarMuridViewProps> = ({
   currentUser
 }) => {
   const isAdmin = currentUser?.role === 'admin';
-  const userKelas = currentUser?.kelasWali || '';
+  const userClasses = useMemo(() => getGuruClassList(currentUser, guruList), [currentUser, guruList]);
+  const userClassDisplay = useMemo(() => getGuruClassDisplay(currentUser, guruList), [currentUser, guruList]);
   const userNip = currentUser?.nip || '';
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedClassFilter, setSelectedClassFilter] = useState<string>(
-    !isAdmin && userKelas ? userKelas : 'SEMUA'
-  );
+  const [selectedClassFilter, setSelectedClassFilter] = useState<string>('SEMUA');
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -58,7 +57,9 @@ export const DaftarMuridView: React.FC<DaftarMuridViewProps> = ({
   // Form State: Identitas Murid Bimbingan
   const [nama, setNama] = useState('');
   const [nisn, setNisn] = useState('');
-  const [kelas, setKelas] = useState(!isAdmin && userKelas ? userKelas : 'VIII E');
+  const [kelas, setKelas] = useState(
+    !isAdmin && userClasses.length > 0 ? userClasses[0] : 'VIII E'
+  );
   const [jenisKelamin, setJenisKelamin] = useState<JenisKelamin>('Laki-laki');
   const [kontakOrangTua, setKontakOrangTua] = useState('');
   const [nipGuruWali, setNipGuruWali] = useState(!isAdmin ? userNip : '');
@@ -67,7 +68,7 @@ export const DaftarMuridView: React.FC<DaftarMuridViewProps> = ({
     setEditingId(null);
     setNama('');
     setNisn('');
-    setKelas(!isAdmin && userKelas ? userKelas : 'VIII E');
+    setKelas(!isAdmin && userClasses.length > 0 ? userClasses[0] : 'VIII E');
     setJenisKelamin('Laki-laki');
     setKontakOrangTua('');
     setNipGuruWali(!isAdmin ? userNip : '');
@@ -96,12 +97,12 @@ export const DaftarMuridView: React.FC<DaftarMuridViewProps> = ({
       return;
     }
 
-    const assignedKelas = !isAdmin && userKelas ? userKelas : kelas;
+    const assignedKelas = !isAdmin && userClasses.length === 1 ? userClasses[0] : kelas;
 
     // Match Guru Wali by class or assigned NIP
     let matchedGuru = guruList.find((g) => g.nip === (nipGuruWali || userNip));
     if (!matchedGuru) {
-      matchedGuru = guruList.find((g) => g.kelasWali === assignedKelas);
+      matchedGuru = guruList.find((g) => g.kelasWali === assignedKelas || g.kelasWali2 === assignedKelas);
     }
 
     const updatedMurid: MuridBimbingan = {
@@ -133,10 +134,15 @@ export const DaftarMuridView: React.FC<DaftarMuridViewProps> = ({
         return;
       }
 
-      // If Guru Wali, enforce teacher's class
+      // If Guru Wali, ensure student belongs to one of the teacher's assigned classes
       const mapped = parsed.map((m) => {
-        const studentKelas = !isAdmin && userKelas ? userKelas : m.kelas;
-        const matched = guruList.find((g) => g.kelasWali === studentKelas);
+        let studentKelas = m.kelas;
+        if (!isAdmin && userClasses.length > 0) {
+          if (!userClasses.includes(m.kelas)) {
+            studentKelas = userClasses[0];
+          }
+        }
+        const matched = guruList.find((g) => g.kelasWali === studentKelas || g.kelasWali2 === studentKelas);
         return {
           ...m,
           kelas: studentKelas,
@@ -155,8 +161,12 @@ export const DaftarMuridView: React.FC<DaftarMuridViewProps> = ({
   };
 
   const roleBaseMurid = muridList.filter((m) => {
-    if (!isAdmin && userKelas) {
-      return m.kelas === userKelas || m.nipGuruWali === userNip;
+    if (!isAdmin && userClasses.length > 0) {
+      return (
+        userClasses.includes(m.kelas) ||
+        m.nipGuruWali === userNip ||
+        isSameGuru({ nip: m.nipGuruWali, name: m.namaGuruWali }, currentUser)
+      );
     }
     return true;
   });
@@ -167,9 +177,7 @@ export const DaftarMuridView: React.FC<DaftarMuridViewProps> = ({
       m.nisn.includes(searchTerm) ||
       m.kelas.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesClass =
-      !isAdmin && userKelas
-        ? true
-        : selectedClassFilter === 'SEMUA' || m.kelas === selectedClassFilter;
+      selectedClassFilter === 'SEMUA' || m.kelas === selectedClassFilter;
     return matchesSearch && matchesClass;
   });
 
@@ -183,16 +191,16 @@ export const DaftarMuridView: React.FC<DaftarMuridViewProps> = ({
             <span>
               {isAdmin
                 ? 'Manajemen Data Peserta Didik'
-                : `Bimbingan Kelas ${userKelas} • ${currentUser?.name}`}
+                : `Bimbingan ${userClassDisplay} • ${currentUser?.name}`}
             </span>
           </div>
           <h2 className="text-2xl font-bold text-slate-800">
-            {isAdmin ? 'Daftar Bimbingan Murid' : `Daftar Murid Bimbingan Kelas ${userKelas}`}
+            {isAdmin ? 'Daftar Bimbingan Murid' : `Daftar Murid Bimbingan ${userClassDisplay}`}
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
             {isAdmin
               ? 'Identitas Murid Bimbingan: Tersinkronisasi dengan Jurnal & Rekap Kehadiran (Kelas VII A s/d IX E)'
-              : `Menampilkan seluruh siswa bimbingan di bawah perwalian Anda pada Kelas ${userKelas}`}
+              : `Menampilkan seluruh siswa bimbingan di bawah perwalian Anda pada ${userClassDisplay}`}
           </p>
         </div>
 
@@ -237,8 +245,8 @@ export const DaftarMuridView: React.FC<DaftarMuridViewProps> = ({
             onClick={() =>
               exportMuridListToPDF(
                 filteredList,
-                !isAdmin && userKelas
-                  ? userKelas
+                !isAdmin && userClasses.length === 1
+                  ? userClasses[0]
                   : selectedClassFilter !== 'SEMUA'
                   ? selectedClassFilter
                   : undefined
@@ -273,7 +281,7 @@ export const DaftarMuridView: React.FC<DaftarMuridViewProps> = ({
               placeholder={
                 isAdmin
                   ? 'Cari Nama Murid, NISN, atau Kelas...'
-                  : `Cari Nama Murid atau NISN Kelas ${userKelas}...`
+                  : `Cari Nama Murid atau NISN ${userClassDisplay}...`
               }
               className="w-full bg-slate-50 border border-slate-300 rounded-lg pl-9 pr-4 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-blue-500"
             />
@@ -295,9 +303,25 @@ export const DaftarMuridView: React.FC<DaftarMuridViewProps> = ({
                 ))}
               </select>
             </div>
+          ) : userClasses.length > 1 ? (
+            <div className="flex items-center space-x-1.5 shrink-0">
+              <Filter className="w-3.5 h-3.5 text-slate-400" />
+              <select
+                value={selectedClassFilter}
+                onChange={(e) => setSelectedClassFilter(e.target.value)}
+                className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-500 font-medium"
+              >
+                <option value="SEMUA">Semua ({userClasses.join(', ')})</option>
+                {userClasses.map((k) => (
+                  <option key={k} value={k}>
+                    Kelas {k}
+                  </option>
+                ))}
+              </select>
+            </div>
           ) : (
             <div className="px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold shrink-0">
-              Kelas {userKelas}
+              {userClasses[0] ? `Kelas ${userClasses[0]}` : 'Guru Wali'}
             </div>
           )}
         </div>
@@ -451,11 +475,23 @@ export const DaftarMuridView: React.FC<DaftarMuridViewProps> = ({
                         </option>
                       ))}
                     </select>
+                  ) : userClasses.length > 1 ? (
+                    <select
+                      value={kelas}
+                      onChange={(e) => setKelas(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-500 font-semibold"
+                    >
+                      {userClasses.map((k) => (
+                        <option key={k} value={k}>
+                          Kelas {k}
+                        </option>
+                      ))}
+                    </select>
                   ) : (
                     <input
                       type="text"
                       disabled
-                      value={`Kelas ${userKelas}`}
+                      value={userClasses[0] ? `Kelas ${userClasses[0]}` : 'Belum Ditentukan'}
                       className="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 font-bold"
                     />
                   )}

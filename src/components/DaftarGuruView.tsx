@@ -34,6 +34,7 @@ export const DaftarGuruView: React.FC<DaftarGuruViewProps> = ({
   const [nip, setNip] = useState('');
   const [nama, setNama] = useState('');
   const [kelasWali, setKelasWali] = useState('VIII E');
+  const [kelasWali2, setKelasWali2] = useState('');
   const [noHp, setNoHp] = useState('');
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<'Aktif' | 'Non-Aktif'>('Aktif');
@@ -43,6 +44,7 @@ export const DaftarGuruView: React.FC<DaftarGuruViewProps> = ({
     setNip('');
     setNama('');
     setKelasWali('VIII E');
+    setKelasWali2('');
     setNoHp('');
     setEmail('');
     setStatus('Aktif');
@@ -58,6 +60,7 @@ export const DaftarGuruView: React.FC<DaftarGuruViewProps> = ({
     setNip(g.nip);
     setNama(g.nama);
     setKelasWali(g.kelasWali);
+    setKelasWali2(g.kelasWali2 || '');
     setNoHp(g.noHp);
     setEmail(g.email);
     setStatus(g.status);
@@ -76,6 +79,7 @@ export const DaftarGuruView: React.FC<DaftarGuruViewProps> = ({
       nip: nip.trim(),
       nama: nama.trim(),
       kelasWali,
+      kelasWali2: kelasWali2 && kelasWali2 !== kelasWali ? kelasWali2 : undefined,
       noHp: noHp.trim() || '-',
       email: email.trim() || `${nip.trim()}@sekolah.sch.id`,
       status
@@ -112,7 +116,8 @@ export const DaftarGuruView: React.FC<DaftarGuruViewProps> = ({
     (g) =>
       g.nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
       g.nip.includes(searchTerm) ||
-      g.kelasWali.toLowerCase().includes(searchTerm.toLowerCase())
+      g.kelasWali.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (g.kelasWali2 && g.kelasWali2.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   return (
@@ -227,9 +232,16 @@ export const DaftarGuruView: React.FC<DaftarGuruViewProps> = ({
                     <td className="py-3 px-4 font-mono font-medium text-slate-800">{g.nip}</td>
                     <td className="py-3 px-4 font-bold text-slate-800">{g.nama}</td>
                     <td className="py-3 px-4">
-                      <span className="px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-bold text-[11px]">
-                        {g.kelasWali}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-bold text-[11px]">
+                          Kelas {g.kelasWali}
+                        </span>
+                        {g.kelasWali2 && (
+                          <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold text-[11px]">
+                            Kelas {g.kelasWali2}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3 px-4 text-slate-600">{g.noHp}</td>
                     <td className="py-3 px-4 text-slate-500">{g.email}</td>
@@ -323,12 +335,12 @@ export const DaftarGuruView: React.FC<DaftarGuruViewProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">
-                    Kelas Wali
+                    Kelas Bimbingan 1 <span className="text-rose-500">*</span>
                   </label>
                   <select
                     value={kelasWali}
                     onChange={(e) => setKelasWali(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-500"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-500 font-semibold text-blue-600"
                   >
                     {ALL_CLASSES.map((k) => (
                       <option key={k} value={k}>
@@ -338,6 +350,26 @@ export const DaftarGuruView: React.FC<DaftarGuruViewProps> = ({
                   </select>
                 </div>
 
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">
+                    Kelas Bimbingan 2 <span className="text-slate-400 font-normal">(Opsional)</span>
+                  </label>
+                  <select
+                    value={kelasWali2}
+                    onChange={(e) => setKelasWali2(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-indigo-500 font-semibold text-indigo-600"
+                  >
+                    <option value="">-- Tidak Ada (1 Kelas) --</option>
+                    {ALL_CLASSES.map((k) => (
+                      <option key={k} value={k}>
+                        Kelas {k}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">
                     Status Keaktifan
@@ -351,19 +383,19 @@ export const DaftarGuruView: React.FC<DaftarGuruViewProps> = ({
                     <option value="Non-Aktif">Non-Aktif</option>
                   </select>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">
-                  No. HP / WhatsApp
-                </label>
-                <input
-                  type="text"
-                  value={noHp}
-                  onChange={(e) => setNoHp(e.target.value)}
-                  placeholder="081234567890"
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-500"
-                />
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">
+                    No. HP / WhatsApp
+                  </label>
+                  <input
+                    type="text"
+                    value={noHp}
+                    onChange={(e) => setNoHp(e.target.value)}
+                    placeholder="081234567890"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-500"
+                  />
+                </div>
               </div>
 
               <div>

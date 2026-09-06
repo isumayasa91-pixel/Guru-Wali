@@ -1,5 +1,5 @@
 import React from 'react';
-import { User } from '../types';
+import { User, GuruWali, getGuruClassDisplay } from '../types';
 import { LayoutDashboard, BookOpen, Users, GraduationCap, FileText, CalendarCheck, Shield, Settings, LogOut, LogIn, UserCheck } from 'lucide-react';
 
 export type ActiveTab = 'dashboard' | 'program' | 'guru' | 'murid' | 'jurnal' | 'rekap' | 'settings';
@@ -12,6 +12,7 @@ interface SidebarProps {
   muridCount: number;
   jurnalCount: number;
   currentUser: User | null;
+  guruList?: GuruWali[];
   onLogout: () => void;
   onOpenLoginModal: () => void;
 }
@@ -24,14 +25,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
   muridCount,
   jurnalCount,
   currentUser,
+  guruList = [],
   onLogout,
   onOpenLoginModal
 }) => {
+  const classText = getGuruClassDisplay(currentUser, guruList);
+
   const allMenuItems = [
     {
       id: 'dashboard' as ActiveTab,
       label: 'Dashboard',
-      subtitle: isAdmin ? 'Ringkasan Laporan Keseluruhan' : `Ringkasan Kelas ${currentUser?.kelasWali || ''}`,
+      subtitle: isAdmin ? 'Ringkasan Laporan Keseluruhan' : `Ringkasan ${classText || 'Bimbingan'}`,
       icon: LayoutDashboard,
       badge: 'Utama',
       roles: ['admin', 'guru']
@@ -55,7 +59,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: 'murid' as ActiveTab,
       label: 'Daftar Bimbingan Murid',
-      subtitle: isAdmin ? 'Identitas Seluruh Murid' : `Murid Kelas ${currentUser?.kelasWali || ''}`,
+      subtitle: isAdmin ? 'Identitas Seluruh Murid' : `Murid ${classText || 'Bimbingan'}`,
       icon: GraduationCap,
       badge: `${muridCount} Murid`,
       roles: ['admin', 'guru']
@@ -63,7 +67,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: 'jurnal' as ActiveTab,
       label: 'Jurnal Guru Wali',
-      subtitle: isAdmin ? 'Semua Catatan Bimbingan' : 'Catatan Bimbingan Kelas',
+      subtitle: isAdmin ? 'Semua Catatan Bimbingan' : `Catatan Bimbingan ${classText || ''}`,
       icon: FileText,
       badge: `${jurnalCount} Catatan`,
       roles: ['admin', 'guru']
@@ -71,7 +75,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: 'rekap' as ActiveTab,
       label: 'Rekap Kehadiran Murid',
-      subtitle: isAdmin ? 'Semua Kelas (S/I/A)' : `Presensi Kelas ${currentUser?.kelasWali || ''}`,
+      subtitle: isAdmin ? 'Semua Kelas (S/I/A)' : `Presensi ${classText || 'Bimbingan'}`,
       icon: CalendarCheck,
       badge: 'Bulanan',
       roles: ['admin', 'guru']
@@ -149,7 +153,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="p-3.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-xs text-slate-300 space-y-2">
           <div className="flex items-center space-x-2 text-slate-100 font-semibold">
             <Shield className="w-4 h-4 text-emerald-400" />
-            <span>Mode: {currentUser ? (isAdmin ? 'Admin Sistem' : `Guru Wali (${currentUser.nip})`) : 'Tamu (Belum Login)'}</span>
+            <span>Mode: {currentUser ? (isAdmin ? 'Admin Sistem' : `Guru Wali ${classText ? classText + ' ' : ''}(${currentUser.nip})`) : 'Tamu (Belum Login)'}</span>
           </div>
           <p className="text-[11px] leading-relaxed text-slate-400">
             {currentUser
